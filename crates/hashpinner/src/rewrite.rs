@@ -16,7 +16,7 @@ use std::ops::Range;
 
 use crate::pattern::{Pattern, any_matches};
 use crate::resolver::{Reachability, Remote, Resolver, TagInfo};
-use crate::scan::{Occurrence, Quoting, Scan, Slot, scan};
+use crate::scan::{Occurrence, Origin, Quoting, Scan, Slot, scan};
 use crate::uses::{GitRef, UsesRef};
 use crate::version::{Version, latest_release, most_specific};
 use crate::{Error, Result};
@@ -321,6 +321,14 @@ fn process_one(occ: &Occurrence, forge: Forge, resolver: &dyn Resolver, opts: &O
         comment: occ.comment.as_ref().map(|c| c.text.clone()),
         notes: Vec::new(),
     };
+
+    // Said before anything else, because the line the reader is looking at does not
+    // contain the value being judged, and the edit will land somewhere else again.
+    if let Origin::Anchored { line } = occ.origin {
+        entry.notes.push(Note::info(format!(
+            "from the anchor defined on line {line}"
+        )));
+    }
 
     let parsed = match UsesRef::parse(&occ.value) {
         Ok(p) => p,
@@ -793,6 +801,72 @@ mod tests {
             out.rewritten.as_deref(),
             Some(wf(&format!("actions/checkout@{CO} # v6.0.1, 2025-12-02")).as_str())
         );
+    }
+
+    /// Two aliases share one anchor, so the value exists once and must be edited
+    /// once. `apply` drops the overlapping duplicates; without that the second edit
+    /// would splice a second copy of the pin into the file.
+    #[test]
+    fn pinning_through_aliases_edits_the_anchor_once() {
+        let src = "\
+x-shared: &co actions/checkout@v6
+jobs:
+  a:
+    steps:
+      - uses: *co
+  b:
+    steps:
+      - uses: *co
+";
+        let out = run(src, &opts(|o| o.pin = true));
+        let rewritten = out.rewritten.expect("rewritten");
+
+        assert_eq!(
+            rewritten,
+            format!(
+                "x-shared: &co actions/checkout@{CO} # v6.0.1, 2025-12-02\n\
+                 jobs:\n  a:\n    steps:\n      - uses: *co\n  \
+                 b:\n    steps:\n      - uses: *co\n"
+            )
+        );
+    }
+
+    /// Both alias sites are judged, and both point the reader at the anchor.
+    #[test]
+    fn check_fails_on_an_unpinned_value_reached_only_through_an_alias() {
+        let src = "\
+x-shared: &co softprops/action-gh-release@v2
+jobs:
+  a:
+    steps:
+      - uses: *co
+";
+        let out = run(src, &opts(|o| o.check = true));
+        assert!(out.failed());
+        assert_eq!(out.entries.len(), 1);
+        assert_eq!(
+            out.entries[0].line, 5,
+            "reported where the alias was written"
+        );
+        assert!(
+            messages(&out)
+                .iter()
+                .any(|m| m.contains("anchor defined on line 1"))
+        );
+    }
+
+    #[test]
+    fn check_fails_on_an_unpinned_value_reached_through_a_merge_key() {
+        let src = "\
+x-defaults: &d
+  uses: softprops/action-gh-release@v2
+jobs:
+  a:
+    steps:
+      - <<: *d
+";
+        let out = run(src, &opts(|o| o.check = true));
+        assert!(out.failed());
     }
 
     #[test]

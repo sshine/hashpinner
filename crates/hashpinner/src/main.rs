@@ -85,7 +85,32 @@
 //!   that hashpinner follows them and pins what it finds inside, so a `./path` is
 //!   not a way to launder an unpinned third-party action past `--check`. A local
 //!   reference that resolves to nothing, or out of the repository, fails.
-//! - **YAML aliases** (`uses: *anchor`) are reported and left alone; pin the anchor.
+//!
+//! ## Anchors, aliases and merge keys
+//!
+//! A `uses:` does not have to be written where it is used:
+//!
+//! ```yaml
+//! x-shared: &co actions/checkout@v4
+//! jobs:
+//!   a:
+//!     steps:
+//!       - uses: *co
+//!       - <<: *step-defaults
+//! ```
+//!
+//! Both forms are resolved, offline, against the document they appear in. This is
+//! not a corner: GitHub gained anchor support in September 2025, so they are getting
+//! more common, and Forgejo has always accepted merge keys. Before they were
+//! resolved, an anchor under a key like `x-shared:` was a way past `--check`
+//! entirely, because nothing looked at it.
+//!
+//! A value reached this way is reported on the line that asked for it and rewritten
+//! on the line that defines it, since the anchor is the only place an edit can go.
+//! Several aliases onto one anchor therefore produce one edit, not several.
+//!
+//! Anchors do not cross a document boundary, and neither does the resolution; an
+//! alias naming an anchor from an earlier document is reported, not resolved.
 //!
 //! One hazard sits outside a pinner's remit and is worth knowing anyway: a workflow
 //! triggered by `pull_request_target` that checks out the pull request's head and
