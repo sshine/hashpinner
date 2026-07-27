@@ -1,27 +1,7 @@
-//! Check, pin and bump SHA-pinned GitHub/Forgejo Actions references.
-//!
-//! An unpinned reference such as `uses: actions/checkout@v4` names a mutable tag, so
-//! whoever controls the upstream repository controls what runs in your CI, with your
-//! secrets. Pinning to a commit fixes that, but a bare 40-character hex string is
-//! unreviewable, so the commit is annotated with what it actually is:
-//!
-//! ```text
-//! uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1, 2025-12-02
-//! ```
-//!
-//! `hashpinner` maintains that form: it lists references, checks them, pins the
-//! unpinned ones, bumps the pinned ones, and verifies that the comments are telling
-//! the truth.
-//!
-//! ## Installation
-//!
-//! ```text
-//! nix run github:nix-tools/hashpinner
-//! cargo install hashpinner
-//! ```
-//!
-//! `git` must be on `PATH`; hashpinner drives it to resolve tags. The Nix package
-//! wraps the binary so this is already taken care of.
+// These docs are spliced into README.md as its CLI section; the sections around
+// it are hand-written in README.tpl at the repository root.
+
+//! The `hashpinner` command: list, check, pin and bump Actions references.
 //!
 //! ## Modes
 //!
@@ -103,19 +83,6 @@
 //! triggered by `pull_request_target` that checks out the pull request's head and
 //! *then* invokes a local action is running attacker-controlled code with secrets.
 //! No amount of pinning helps there.
-//!
-//! ## Self-hosting
-//!
-//! To run this from your own Forgejo, mirror the repository and reference it by
-//! absolute URL, which Forgejo accepts and GitHub does not:
-//!
-//! ```text
-//! uses: https://git.example.com/nix-tools/hashpinner@<sha>   # Forgejo
-//! uses: nix-tools/hashpinner@<sha>                           # GitHub
-//! ```
-//!
-//! Release binaries are always fetched from the GitHub release. On an instance with
-//! no route to github.com, set the action's `base-url` input to an internal mirror.
 
 mod cli;
 

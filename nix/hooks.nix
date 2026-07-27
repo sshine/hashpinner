@@ -11,9 +11,10 @@
       ...
     }:
     let
-      # Flags to reproduce the committed README.md from the CLI docs. --input is required
-      # now that the crate has a lib target too: cargo-readme would otherwise read lib.rs.
-      readmeArgs = "--project-root crates/hashpinner --input src/main.rs --no-title --no-license --no-badges";
+      # Flags to reproduce the committed README.md from README.tpl and the CLI docs.
+      # --input is required because the crate has a lib target: cargo-readme would
+      # otherwise read lib.rs.
+      readmeArgs = "--project-root crates/hashpinner --input src/main.rs --template ../../README.tpl";
 
       # Reference tools by absolute store path: the `nix flake check` hk-check sandbox
       # runs hooks without the devshell PATH, so a bare `treefmt` is not found there.

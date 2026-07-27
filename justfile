@@ -30,13 +30,13 @@ build:
 doc *args='':
     cargo doc --no-deps --all-features {{args}}
 
-readme_args := "--project-root crates/hashpinner --input src/main.rs --no-title --no-license --no-badges"
+readme_args := "--project-root crates/hashpinner --input src/main.rs --template ../../README.tpl"
 
-# Regenerate README.md from the hashpinner crate docs
+# Regenerate README.md from README.tpl and the CLI docs
 readme:
     cargo readme {{readme_args}} -o README.md
 
-# Check README.md is in sync with the crate docs
+# Check README.md is in sync with README.tpl and the CLI docs
 readme-check:
     cargo readme {{readme_args}} | diff - README.md
 
