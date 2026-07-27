@@ -1,0 +1,28 @@
+# Rust
+/target/
+
+# Nix
+/.direnv/
+/result
+/hk.pkl
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor backups
+*~
+\#*\#
+.*.swp
+
+# Agentic
+.claude/
+
+# Release artifacts
+/dist/
