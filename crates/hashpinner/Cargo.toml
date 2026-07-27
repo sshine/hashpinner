@@ -1,0 +1,27 @@
+[package]
+name = "hashpinner"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Check, pin and bump SHA-pinned GitHub/Forgejo Actions references"
+readme = "../../README.md"
+keywords = ["github-actions", "forgejo", "supply-chain", "pinning", "cli"]
+categories = ["command-line-utilities", "development-tools"]
+
+[lints]
+workspace = true
+
+[dependencies]
+thiserror.workspace = true
+saphyr-parser.workspace = true
+serde.workspace = true
+clap.workspace = true
+owo-colors.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+insta.workspace = true
+tempfile.workspace = true
+assert_cmd.workspace = true
+predicates.workspace = true

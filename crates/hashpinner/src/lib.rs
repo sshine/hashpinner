@@ -1,6 +1,16 @@
-//! Core library for checking, pinning and bumping Actions references.
+//! Check, pin and bump SHA-pinned GitHub/Forgejo Actions references.
 //!
-//! Provides the building blocks used by the `hashpinner` CLI:
+//! An unpinned reference such as `uses: actions/checkout@v4` names a mutable tag,
+//! so whoever controls the upstream repository controls what runs in your CI, with
+//! your secrets. Pinning to a commit fixes that, and annotating the commit with the
+//! tag it carries keeps the result reviewable:
+//!
+//! ```text
+//! uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1, 2025-12-02
+//! ```
+//!
+//! This crate ships the `hashpinner` binary, which maintains that form. The library
+//! side is the same machinery, for anything that wants it directly:
 //!
 //! - **[`scan`]** — finds every `uses:` value in a file, with the byte span an
 //!   edit must replace.

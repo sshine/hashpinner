@@ -17,7 +17,7 @@
 //!
 //! ```text
 //! nix run github:nix-tools/hashpinner
-//! cargo install hashpinner-cli
+//! cargo install hashpinner
 //! ```
 //!
 //! `git` must be on `PATH`; hashpinner drives it to resolve tags. The Nix package
@@ -117,21 +117,19 @@
 //! Release binaries are always fetched from the GitHub release. On an instance with
 //! no route to github.com, set the action's `base-url` input to an internal mirror.
 
-mod args;
-mod discover;
-mod report;
+mod cli;
 
 use std::process::ExitCode;
 
 use clap::Parser;
-use hashpinner_core::git::GitResolver;
-use hashpinner_core::pattern::Pattern;
-use hashpinner_core::rewrite::{self, Options};
-use hashpinner_core::{Error, Result};
+use hashpinner::git::GitResolver;
+use hashpinner::pattern::Pattern;
+use hashpinner::rewrite::{self, Options};
+use hashpinner::{Error, Result};
 use owo_colors::OwoColorize;
 
-use args::{Args, Format};
-use report::FileReport;
+use cli::args::{Args, Format};
+use cli::report::{self, FileReport};
 
 fn main() -> ExitCode {
     let args = Args::parse();
@@ -149,7 +147,7 @@ fn main() -> ExitCode {
 
 /// Do the work, returning whether anything failed validation.
 fn run(args: &Args) -> Result<bool> {
-    let (targets, warnings) = discover::discover(&args.paths)?;
+    let (targets, warnings) = cli::discover::discover(&args.paths)?;
 
     let opts = Options {
         check: args.check,

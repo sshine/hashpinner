@@ -17,7 +17,7 @@ the truth.
 
 ```
 nix run github:nix-tools/hashpinner
-cargo install hashpinner-cli
+cargo install hashpinner
 ```
 
 `git` must be on `PATH`; hashpinner drives it to resolve tags. The Nix package

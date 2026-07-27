@@ -217,25 +217,17 @@ dependencies = [
 ]
 
 [[package]]
-name = "hashpinner-cli"
+name = "hashpinner"
 version = "0.1.0"
 dependencies = [
  "assert_cmd",
  "clap",
- "hashpinner-core",
+ "insta",
  "owo-colors",
  "predicates",
- "serde_json",
- "tempfile",
-]
-
-[[package]]
-name = "hashpinner-core"
-version = "0.1.0"
-dependencies = [
- "insta",
  "saphyr-parser",
  "serde",
+ "serde_json",
  "tempfile",
  "thiserror",
 ]

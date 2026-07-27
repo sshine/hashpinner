@@ -2,8 +2,8 @@
 
 use std::path::{Path, PathBuf};
 
-use hashpinner_core::rewrite::Forge;
-use hashpinner_core::{Error, Result};
+use hashpinner::rewrite::Forge;
+use hashpinner::{Error, Result};
 
 /// The three workflow directories, in the order Forgejo searches them.
 const WORKFLOW_DIRS: [&str; 3] = [

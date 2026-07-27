@@ -37,9 +37,7 @@ jobs:
           /tmp/hashpinner --check --no-allow .github/workflows
 
       - name: Publish to crates.io
-        run: |
-          nix develop -c cargo publish --package hashpinner-core --token "${{ secrets.CRATES_IO_TOKEN }}"
-          nix develop -c cargo publish --package hashpinner-cli --token "${{ secrets.CRATES_IO_TOKEN }}"
+        run: nix develop -c cargo publish -p hashpinner --token "${{ secrets.CRATES_IO_TOKEN }}"
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3.0.2, 2026-07-13

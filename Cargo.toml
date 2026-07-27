@@ -15,9 +15,6 @@ unused_must_use = "deny"
 unwrap_used = "deny"
 
 [workspace.dependencies]
-# Internal crates
-hashpinner-core = { version = "0.1.0", path = "crates/hashpinner-core" }
-
 # Error handling
 thiserror = "2"
 

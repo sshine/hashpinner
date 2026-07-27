@@ -1,6 +1,6 @@
 //! Rendering results, in text for people and JSON for scripts.
 
-use hashpinner_core::rewrite::{Entry, Level, Outcome};
+use hashpinner::rewrite::{Entry, Level, Outcome};
 use owo_colors::OwoColorize;
 
 /// One file's results, kept alongside the path they came from.

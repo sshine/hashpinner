@@ -30,9 +30,9 @@ build:
 doc *args='':
     cargo doc --no-deps --all-features {{args}}
 
-readme_args := "--project-root crates/hashpinner-cli --no-title --no-license --no-badges"
+readme_args := "--project-root crates/hashpinner --input src/main.rs --no-title --no-license --no-badges"
 
-# Regenerate README.md from the hashpinner-cli crate docs
+# Regenerate README.md from the hashpinner crate docs
 readme:
     cargo readme {{readme_args}} -o README.md
 
@@ -46,7 +46,7 @@ release_targets := "x86_64-unknown-linux-musl aarch64-unknown-linux-musl"
 dist version:
     rm -rf dist && mkdir -p dist
     for target in {{release_targets}}; do \
-        cargo build --release --locked --target "$target" -p hashpinner-cli; \
+        cargo build --release --locked --target "$target" -p hashpinner; \
         name="hashpinner-{{version}}-$target"; \
         tar -czf "dist/$name.tar.gz" -C "target/$target/release" hashpinner; \
         ( cd dist && sha256sum "$name.tar.gz" > "$name.tar.gz.sha256" ); \

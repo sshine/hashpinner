@@ -29,7 +29,7 @@ rustPlatform.buildRustPackage {
 
   cargoBuildFlags = [
     "--package"
-    "hashpinner-cli"
+    "hashpinner"
   ];
 
   nativeBuildInputs = [ makeWrapper ];
