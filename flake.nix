@@ -37,16 +37,6 @@
   };
 
   outputs =
-    inputs:
-    inputs.flake-parts.lib.mkFlake { inherit inputs; } (
-      inputs.import-tree ./nix
-      // {
-        systems = [
-          "x86_64-linux"
-          "aarch64-linux"
-          "x86_64-darwin"
-          "aarch64-darwin"
-        ];
-      }
-    );
+    { flake-parts, import-tree, ... }@inputs:
+    flake-parts.lib.mkFlake { inherit inputs; } (import-tree ./nix);
 }
