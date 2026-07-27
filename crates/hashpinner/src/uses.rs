@@ -313,7 +313,7 @@ mod tests {
 
     #[test]
     fn absolute_url_with_subpath() {
-        let r = remote("https://git.shine.town/nix-tools/hashpinner/sub@v1");
+        let r = remote("https://git.shine.town/sshine/hashpinner/sub@v1");
         assert_eq!(r.host.as_deref(), Some("https://git.shine.town"));
         assert_eq!(r.subpath.as_deref(), Some("sub"));
     }

@@ -37,7 +37,7 @@ inputs:
     description: >-
       Where release assets live. Override on instances with no route to github.com.
     required: false
-    default: https://github.com/nix-tools/hashpinner/releases/download
+    default: https://github.com/sshine/hashpinner/releases/download
 
 runs:
   using: composite

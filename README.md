@@ -18,13 +18,13 @@ that the comments are telling the truth.
 ## Installation
 
 ```
-nix run github:nix-tools/hashpinner
-nix profile install github:nix-tools/hashpinner
+nix run github:sshine/hashpinner
+nix profile install github:sshine/hashpinner
 cargo install hashpinner
 ```
 
 Prebuilt static binaries for x86_64 and aarch64 Linux are attached to each
-[release](https://github.com/nix-tools/hashpinner/releases).
+[release](https://github.com/sshine/hashpinner/releases).
 
 `git` must be on `PATH`; hashpinner drives it to resolve tags. The Nix package wraps
 the binary so this is already taken care of.
@@ -120,8 +120,8 @@ The same checks, as a composite action that runs unchanged on GitHub-hosted runn
 and on Forgejo runners with either a `docker` or a `host` label:
 
 ```yaml
-- uses: nix-tools/hashpinner@<sha>                      # GitHub
-- uses: https://github.com/nix-tools/hashpinner@<sha>   # Forgejo, absolute URL
+- uses: sshine/hashpinner@<sha>                      # GitHub
+- uses: https://github.com/sshine/hashpinner@<sha>   # Forgejo, absolute URL
   with:
     version: v0.1.0
     mode: check
@@ -152,7 +152,7 @@ fetched from the GitHub release; on an instance with no route to github.com, mir
 the assets and point `base-url` at them:
 
 ```yaml
-- uses: https://git.example.com/nix-tools/hashpinner@<sha>
+- uses: https://git.example.com/sshine/hashpinner@<sha>
   with:
     version: v0.1.0
     base-url: https://artifacts.example.com/hashpinner

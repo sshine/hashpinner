@@ -123,8 +123,8 @@ mod tests {
 
     #[test]
     fn any_matches_is_a_disjunction() {
-        let ps = [Pattern::new("actions/*"), Pattern::new("nix-tools/*")];
-        assert!(any_matches(&ps, "nix-tools/hashpinner"));
+        let ps = [Pattern::new("actions/*"), Pattern::new("sshine/*")];
+        assert!(any_matches(&ps, "sshine/hashpinner"));
         assert!(!any_matches(&ps, "softprops/action-gh-release"));
         assert!(!any_matches(&[], "actions/checkout"));
     }
