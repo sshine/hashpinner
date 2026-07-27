@@ -144,6 +144,19 @@ pub struct Unsupported {
     pub line: usize,
 }
 
+/// An event named under a workflow's top-level `on:` key.
+///
+/// Which events a workflow answers to decides who can make it run, and therefore
+/// who can reach the secrets it holds. That is the same question pinning asks about
+/// third-party code, so the names are collected here alongside the references.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Trigger {
+    /// The event name as written.
+    pub name: String,
+    /// 1-indexed line, for diagnostics.
+    pub line: usize,
+}
+
 /// Everything of interest in one file.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Scan {
@@ -151,6 +164,8 @@ pub struct Scan {
     pub occurrences: Vec<Occurrence>,
     /// Values recognised as `uses:` but not representable, reported and left alone.
     pub unsupported: Vec<Unsupported>,
+    /// Events under the top-level `on:` key, in the order they were written.
+    pub triggers: Vec<Trigger>,
 }
 
 /// One level of document nesting.
@@ -230,13 +245,27 @@ pub fn scan(src: &str) -> Result<Scan> {
             Event::Scalar(value, style, ..) => {
                 if let Some(Frame::Mapping {
                     expect_key: expect_key @ true,
-                    current_key,
                     ..
                 }) = frames.last_mut()
                 {
                     *expect_key = false;
-                    *current_key = Some(value.into_owned());
+                    if is_trigger_key(&frames, &path) {
+                        out.triggers.push(Trigger {
+                            name: value.to_string(),
+                            line: line_of(src, span.start),
+                        });
+                    }
+                    if let Some(Frame::Mapping { current_key, .. }) = frames.last_mut() {
+                        *current_key = Some(value.into_owned());
+                    }
                     continue;
+                }
+
+                if is_trigger_value(&frames, &path) {
+                    out.triggers.push(Trigger {
+                        name: value.to_string(),
+                        line: line_of(src, span.start),
+                    });
                 }
 
                 if let Some(slot) = pinnable_slot(&frames, &path) {
@@ -391,6 +420,37 @@ fn replay<'a>(
         index += 1;
     }
     Ok(())
+}
+
+/// Whether a key being read names a trigger, as in `on: {pull_request_target: ...}`.
+///
+/// The key sits in a mapping that is itself the value of the root `on:`, so the path
+/// is what identifies it; the key's own name is the event.
+fn is_trigger_key(frames: &[Frame], path: &[Seg]) -> bool {
+    matches!(frames.last(), Some(Frame::Mapping { .. })) && path_is_on(path)
+}
+
+/// Whether a value being read names a trigger, covering `on: push` and `on: [push]`.
+fn is_trigger_value(frames: &[Frame], path: &[Seg]) -> bool {
+    match frames.last() {
+        // `on: push`, still inside the root mapping with `on` as the pending key.
+        Some(Frame::Mapping { current_key, .. }) => {
+            current_key.as_deref() == Some("on") && path_is_root(path)
+        }
+        // `on: [push, pull_request_target]`.
+        Some(Frame::Sequence) => path_is_on(path),
+        None => false,
+    }
+}
+
+/// Whether `path` addresses the document root itself.
+fn path_is_root(path: &[Seg]) -> bool {
+    path.len() == 1
+}
+
+/// Whether `path` addresses the value of the root `on:` key.
+fn path_is_on(path: &[Seg]) -> bool {
+    matches!(path, [_, Seg::Key(key)] if key == "on")
 }
 
 /// Whether the key now awaiting its value is the merge key.
@@ -823,6 +883,64 @@ jobs:
     fn line_numbers_are_one_indexed() {
         let s = scan_ok(HOSTILE);
         assert_eq!(s.occurrences[0].line, 8);
+    }
+
+    fn triggers(src: &str) -> Vec<String> {
+        scan_ok(src).triggers.into_iter().map(|t| t.name).collect()
+    }
+
+    /// All three spellings of `on:`, which are equally common in the wild.
+    #[test]
+    fn triggers_are_collected_however_they_are_written() {
+        assert_eq!(triggers("on: push\njobs: {}\n"), ["push"]);
+        assert_eq!(
+            triggers("on: [push, pull_request_target]\njobs: {}\n"),
+            ["push", "pull_request_target"]
+        );
+        assert_eq!(
+            triggers("on:\n  push:\n    branches: [main]\n  workflow_run:\n    workflows: [ci]\n"),
+            ["push", "workflow_run"]
+        );
+    }
+
+    /// `on` is a boolean in YAML 1.1, so a parser that resolves types would hand back
+    /// `true` and the key would never match. This one does not, and that must hold.
+    #[test]
+    fn the_on_key_is_not_resolved_to_a_boolean() {
+        assert_eq!(
+            triggers("on: pull_request_target\n"),
+            ["pull_request_target"]
+        );
+    }
+
+    /// Only the top-level `on:` names triggers; the word appears elsewhere as data.
+    #[test]
+    fn a_nested_on_key_is_not_a_trigger() {
+        let src = "\
+on: push
+jobs:
+  a:
+    steps:
+      - uses: a/b@v1
+        with:
+          on: pull_request_target
+";
+        assert_eq!(triggers(src), ["push"]);
+    }
+
+    #[test]
+    fn a_file_with_no_triggers_reports_none() {
+        assert!(
+            scan_ok("runs:\n  using: composite\n  steps: []\n")
+                .triggers
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn trigger_lines_are_recorded() {
+        let s = scan_ok("name: ci\non:\n  pull_request_target:\n");
+        assert_eq!(s.triggers[0].line, 3);
     }
 
     #[test]

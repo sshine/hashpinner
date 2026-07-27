@@ -43,9 +43,25 @@ pub struct Options {
     pub deep: bool,
     /// Slugs exempt from failing `--check` when unpinned.
     pub allow: Vec<Pattern>,
+    /// Trigger names exempt from failing `--check`.
+    pub allow_triggers: Vec<String>,
     /// Where a bare `owner/repo` points on a Forgejo instance.
     pub forgejo_host: String,
 }
+
+/// Triggers that hand fork-authored code the repository's own privileges.
+///
+/// A workflow on one of these runs against the *target* repository, with its secrets
+/// and a write-scoped token, in response to something an outsider did. Pinning says
+/// nothing about it: the untrusted code arrives through the event, not through a
+/// `uses:`. It is reported here because it answers the same question the rest of the
+/// tool asks — who controls what runs in this repository's CI.
+///
+/// The trigger is flagged rather than any particular use of it. Checking out the
+/// pull request's head is the well-known way to get hurt, but it is not the only
+/// one: `GITHUB_ENV` writes, argument injection and cache poisoning all escalate
+/// without the workflow ever executing a checkout.
+const DANGEROUS_TRIGGERS: [&str; 2] = ["pull_request_target", "workflow_run"];
 
 impl Default for Options {
     fn default() -> Self {
@@ -55,6 +71,7 @@ impl Default for Options {
             bump: false,
             deep: false,
             allow: vec![Pattern::new("actions/*")],
+            allow_triggers: Vec::new(),
             // Forgejo's own default for DEFAULT_ACTIONS_URL. Note this is not GitHub:
             // a bare `actions/checkout` means a different repository, with different
             // commit ids, depending on which directory the workflow lives in.
@@ -251,11 +268,33 @@ pub fn process(
     let Scan {
         occurrences,
         unsupported,
+        triggers,
     } = scan(src)?;
 
     let mut entries = Vec::new();
     let mut edits = Vec::new();
     let mut locals = Vec::new();
+    let mut findings = Vec::new();
+
+    for trigger in &triggers {
+        if !DANGEROUS_TRIGGERS.contains(&trigger.name.as_str())
+            || opts.allow_triggers.contains(&trigger.name)
+        {
+            continue;
+        }
+        findings.push(Finding::at(
+            Level::Fail,
+            trigger.line,
+            format!(
+                "{} runs against this repository, with its secrets and a write token, \
+                 on something an outsider did; no amount of pinning constrains that. \
+                 Use {} instead, or allow it with --allow-trigger {}",
+                trigger.name,
+                alternative_to(&trigger.name),
+                trigger.name,
+            ),
+        ));
+    }
 
     for u in unsupported {
         entries.push(Entry {
@@ -284,10 +323,19 @@ pub fn process(
 
     Ok(Outcome {
         entries,
-        findings: Vec::new(),
+        findings,
         locals,
         rewritten,
     })
+}
+
+/// The safe trigger to reach for instead, named in the message so the finding is
+/// actionable rather than just alarming.
+fn alternative_to(trigger: &str) -> &'static str {
+    match trigger {
+        "workflow_run" => "workflow_call",
+        _ => "pull_request",
+    }
 }
 
 /// What one reference produced.
@@ -867,6 +915,65 @@ jobs:
 ";
         let out = run(src, &opts(|o| o.check = true));
         assert!(out.failed());
+    }
+
+    const SAFE_WORKFLOW: &str = "on: pull_request\njobs:\n  a:\n    steps: []\n";
+
+    #[test]
+    fn a_dangerous_trigger_fails() {
+        for trigger in ["pull_request_target", "workflow_run"] {
+            let src = format!("on: {trigger}\njobs:\n  a:\n    steps: []\n");
+            let out = run(&src, &opts(|o| o.check = true));
+            assert!(out.failed(), "{trigger} should fail");
+            assert_eq!(out.findings.len(), 1);
+            assert_eq!(out.findings[0].line, Some(1));
+        }
+    }
+
+    #[test]
+    fn an_ordinary_trigger_passes() {
+        let out = run(SAFE_WORKFLOW, &opts(|o| o.check = true));
+        assert!(!out.failed());
+        assert!(out.findings.is_empty());
+    }
+
+    /// Reading the event payload without running fork code is what the trigger is
+    /// for, so there has to be a way to say a given workflow is doing that.
+    #[test]
+    fn an_allowed_trigger_stops_failing() {
+        let src = "on: pull_request_target\njobs:\n  a:\n    steps: []\n";
+        let out = run(
+            src,
+            &opts(|o| {
+                o.check = true;
+                o.allow_triggers = vec!["pull_request_target".to_string()];
+            }),
+        );
+        assert!(!out.failed());
+    }
+
+    /// Allowing one dangerous trigger must not quietly allow the other.
+    #[test]
+    fn allowing_one_trigger_does_not_allow_the_rest() {
+        let src = "on: [pull_request_target, workflow_run]\njobs:\n  a:\n    steps: []\n";
+        let out = run(
+            src,
+            &opts(|o| {
+                o.check = true;
+                o.allow_triggers = vec!["pull_request_target".to_string()];
+            }),
+        );
+        assert!(out.failed());
+        assert_eq!(out.findings.len(), 1);
+        assert!(out.findings[0].message.contains("workflow_run"));
+    }
+
+    /// A gate reports; it does not edit. There is no rewrite for a trigger.
+    #[test]
+    fn a_dangerous_trigger_is_never_rewritten() {
+        let src = "on: pull_request_target\njobs:\n  a:\n    steps: []\n";
+        let out = run(src, &opts(|o| o.pin = true));
+        assert_eq!(out.rewritten, None);
     }
 
     #[test]

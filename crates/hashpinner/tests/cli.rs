@@ -192,6 +192,37 @@ fn a_cycle_between_local_actions_terminates() {
 }
 
 #[test]
+fn a_dangerous_trigger_fails_check() {
+    let dir = repo(&[PINNED]);
+    std::fs::write(
+        dir.path().join(".github/workflows/label.yml"),
+        "on: pull_request_target\njobs:\n  a:\n    steps: []\n",
+    )
+    .expect("write");
+
+    hashpinner(dir.path())
+        .arg("--check")
+        .assert()
+        .code(FAILED)
+        .stdout(predicates::str::contains("pull_request_target"));
+}
+
+#[test]
+fn allow_trigger_exempts_it() {
+    let dir = repo(&[PINNED]);
+    std::fs::write(
+        dir.path().join(".github/workflows/label.yml"),
+        "on: pull_request_target\njobs:\n  a:\n    steps: []\n",
+    )
+    .expect("write");
+
+    hashpinner(dir.path())
+        .args(["--check", "--allow-trigger", "pull_request_target"])
+        .assert()
+        .success();
+}
+
+#[test]
 fn check_writes_nothing() {
     let dir = repo(&["actions/checkout@v4"]);
     let before = workflow(dir.path());

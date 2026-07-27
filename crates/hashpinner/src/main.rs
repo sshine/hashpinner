@@ -60,6 +60,30 @@
 //! hashpinner --check --allow 'actions/*' --allow 'nix-community/*'
 //! ```
 //!
+//! ## Triggers
+//!
+//! `pull_request_target` and `workflow_run` fail `--check`. A workflow on either one
+//! runs against *this* repository, with its secrets and a write-scoped token, in
+//! response to something an outsider did. That is the same question pinning asks —
+//! who controls what runs in this repository's CI — arriving through the event
+//! rather than through a `uses:`, and no amount of pinning constrains it.
+//!
+//! The trigger is flagged, not any particular use of it. Checking out the pull
+//! request's head is the well-known way to get hurt, but `GITHUB_ENV` writes,
+//! argument injection and cache poisoning all escalate without a checkout, so
+//! "we never run the fork's code" is not the safe harbour it sounds like.
+//!
+//! Reading the event payload alone — labelling, commenting, assigning reviewers — is
+//! a legitimate use and a common one. Say so explicitly:
+//!
+//! ```text
+//! hashpinner --check --allow-trigger pull_request_target
+//! ```
+//!
+//! This is the whole of hashpinner's interest in workflow security. For
+//! `permissions:`, template injection, credential persistence and the rest, use a
+//! dedicated analyser such as zizmor.
+//!
 //! ## Forgejo
 //!
 //! A bare `owner/repo` does not mean the same thing on both forges. Under
@@ -111,11 +135,6 @@
 //!
 //! Anchors do not cross a document boundary, and neither does the resolution; an
 //! alias naming an anchor from an earlier document is reported, not resolved.
-//!
-//! One hazard sits outside a pinner's remit and is worth knowing anyway: a workflow
-//! triggered by `pull_request_target` that checks out the pull request's head and
-//! *then* invokes a local action is running attacker-controlled code with secrets.
-//! No amount of pinning helps there.
 
 mod cli;
 
@@ -163,6 +182,7 @@ fn run(args: &Args) -> Result<bool> {
             .iter()
             .map(|p| Pattern::new(p))
             .collect(),
+        allow_triggers: args.allow_trigger.clone(),
         forgejo_host: args.forgejo_host.clone(),
     };
 

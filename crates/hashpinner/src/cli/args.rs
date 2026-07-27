@@ -47,6 +47,14 @@ pub struct Args {
     #[arg(long = "no-allow", conflicts_with = "allow")]
     pub no_allow: bool,
 
+    /// Exempt a workflow trigger from failing --check (repeatable).
+    ///
+    /// `pull_request_target` and `workflow_run` fail by default. A workflow that only
+    /// reads the event payload — labelling, commenting, assigning reviewers — is a
+    /// legitimate use, and this is how to say so.
+    #[arg(long = "allow-trigger", value_name = "EVENT")]
+    pub allow_trigger: Vec<String>,
+
     /// Where a bare owner/repo points in .forgejo/ and .gitea/ files.
     #[arg(long = "forgejo-host", value_name = "URL", default_value = DEFAULT_FORGEJO_HOST)]
     pub forgejo_host: String,
