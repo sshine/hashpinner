@@ -1,0 +1,65 @@
+name: Rust CI
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*'
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0, 2026-07-16
+
+      - uses: nixbuild/nix-quick-install-action@9f63be77f412a248c9d9a65a4c82cf066cdf8f0c # v35, 2026-06-17
+
+      - name: Restore and save Nix store
+        uses: nix-community/cache-nix-action@7df957e333c1e5da7721f60227dbba6d06080569 # v7.0.2, 2026-01-30
+        with:
+          primary-key: nix-${{ runner.os }}-${{ hashFiles('**/*.nix', '**/flake.lock') }}
+          restore-prefixes-first-match: nix-${{ runner.os }}-
+          gc-max-store-size-linux: 2G
+          purge: true
+          purge-prefixes: nix-${{ runner.os }}-
+          purge-created: 0
+          purge-last-accessed: P1DT12H
+          purge-primary-key: never
+
+      - name: Build Nix dev shell
+        run: nix develop -c true
+
+      - name: Check formatting
+        run: nix develop -c just fmt-check
+
+      - name: Clippy
+        run: nix develop -c just lint
+
+      - name: Test
+        run: nix develop -c just test
+
+      - name: Build
+        run: nix develop -c just build
+
+      - name: Documentation
+        run: nix develop -c just doc
+
+      - name: Check README.md is up to date
+        run: nix develop -c just readme-check
+
+      - name: Lockfile check
+        run: nix develop -c cargo metadata --locked --format-version 1 > /dev/null
+
+      - name: Package check
+        run: nix develop -c cargo package --workspace
+
+      # Dogfooding: hashpinner gates its own workflows, so a regression in the
+      # checker shows up here before it reaches anyone else.
+      - name: Self-check pins
+        run: nix develop -c just selfcheck

@@ -1,0 +1,129 @@
+# Composite rather than docker or node: it is the only form that runs unchanged on
+# GitHub-hosted runners and on a Forgejo runner registered with either a `docker` or
+# a `host` label, without requiring Docker or Node to be present.
+#
+# The script is POSIX sh and assumes almost nothing, because Forgejo runner images
+# are frequently Alpine: no bash, no glibc, busybox wget rather than curl. See the
+# README for the full list of constraints this encodes.
+name: hashpinner
+description: Check that GitHub/Forgejo Actions references are pinned to commits
+author: sshine
+
+branding:
+  icon: lock
+  color: blue
+
+inputs:
+  version:
+    description: Release tag of hashpinner to run, for example v0.1.0.
+    required: true
+  mode:
+    description: One of list, check, pin or bump.
+    required: false
+    default: check
+  deep:
+    description: Also verify that pins exist, belong to the repository, and are described truthfully.
+    required: false
+    default: "false"
+  path:
+    description: Files or directories to scan. Defaults to the repository's workflow directories.
+    required: false
+    default: ""
+  allow:
+    description: Allowlist patterns, whitespace-separated. Empty string means strict.
+    required: false
+    default: actions/*
+  base-url:
+    description: >-
+      Where release assets live. Override on instances with no route to github.com.
+    required: false
+    default: https://github.com/nix-tools/hashpinner/releases/download
+
+runs:
+  using: composite
+  steps:
+    - name: Run hashpinner
+      shell: sh
+      env:
+        HP_VERSION: ${{ inputs.version }}
+        HP_MODE: ${{ inputs.mode }}
+        HP_DEEP: ${{ inputs.deep }}
+        HP_PATH: ${{ inputs.path }}
+        HP_ALLOW: ${{ inputs.allow }}
+        HP_BASE_URL: ${{ inputs.base-url }}
+      run: |
+        set -eu
+
+        # $RUNNER_ARCH reports the Docker *daemon host* architecture, so it is wrong
+        # under emulation, and older forgejo-runner versions return "undefined" for
+        # anything unusual. uname is the only reliable source.
+        case "$(uname -m)" in
+          x86_64|amd64)  arch=x86_64 ;;
+          aarch64|arm64) arch=aarch64 ;;
+          *) echo "hashpinner: unsupported architecture $(uname -m)" >&2; exit 1 ;;
+        esac
+        case "$(uname -s)" in
+          Linux) ;;
+          *) echo "hashpinner: only Linux runners are supported" >&2; exit 1 ;;
+        esac
+
+        asset="hashpinner-${HP_VERSION}-${arch}-unknown-linux-musl.tar.gz"
+        url="${HP_BASE_URL%/}/${HP_VERSION}/${asset}"
+
+        # $RUNNER_TOOL_CACHE defaults to /opt/hostedtoolcache, which frequently does
+        # not exist in a Forgejo runner container.
+        tmp="$(mktemp -d)"
+        trap 'rm -rf "$tmp"' EXIT
+
+        # -L is not optional: Forgejo redirects release attachments to signed
+        # object-store URLs on a different host.
+        fetch() {
+          if command -v curl >/dev/null 2>&1; then
+            curl --fail --silent --show-error --location --retry 3 -o "$2" "$1"
+          elif command -v wget >/dev/null 2>&1; then
+            wget -q -O "$2" "$1"
+          else
+            echo "hashpinner: neither curl nor wget is available" >&2; exit 1
+          fi
+        }
+
+        fetch "$url" "$tmp/$asset"
+        fetch "$url.sha256" "$tmp/$asset.sha256"
+
+        expected="$(awk '{print $1; exit}' "$tmp/$asset.sha256")"
+        if command -v sha256sum >/dev/null 2>&1; then
+          actual="$(sha256sum "$tmp/$asset" | awk '{print $1}')"
+        elif command -v shasum >/dev/null 2>&1; then
+          actual="$(shasum -a 256 "$tmp/$asset" | awk '{print $1}')"
+        elif command -v openssl >/dev/null 2>&1; then
+          actual="$(openssl dgst -sha256 "$tmp/$asset" | awk '{print $NF}')"
+        else
+          echo "hashpinner: no SHA-256 tool is available" >&2; exit 1
+        fi
+
+        if [ "$expected" != "$actual" ]; then
+          echo "hashpinner: checksum mismatch for $asset" >&2
+          echo "  expected $expected" >&2
+          echo "  actual   $actual" >&2
+          exit 1
+        fi
+
+        tar -xzf "$tmp/$asset" -C "$tmp"
+        chmod +x "$tmp/hashpinner"
+
+        set -- "--${HP_MODE}"
+        # An `[ ... ] && ...` one-liner would abort the script under `set -e`
+        # whenever the test is false, which is the common case here.
+        if [ "$HP_DEEP" = "true" ]; then
+          set -- "$@" --deep
+        fi
+        if [ -z "$HP_ALLOW" ]; then
+          set -- "$@" --no-allow
+        else
+          for pattern in $HP_ALLOW; do set -- "$@" --allow "$pattern"; done
+        fi
+        # Unquoted on purpose: an empty HP_PATH must contribute no argument at all.
+        # shellcheck disable=SC2086
+        set -- "$@" $HP_PATH
+
+        exec "$tmp/hashpinner" "$@"
