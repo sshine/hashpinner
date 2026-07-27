@@ -1,12 +1,14 @@
 //! Rendering results, in text for people and JSON for scripts.
 
-use hashpinner::rewrite::{Entry, Level, Outcome};
+use hashpinner::rewrite::{Entry, Finding, Forge, Level, Outcome};
 use owo_colors::OwoColorize;
 
 /// One file's results, kept alongside the path they came from.
 pub struct FileReport {
     /// The file, as given on the command line or discovered.
     pub path: String,
+    /// Which forge's rules were applied, which a second referrer may contradict.
+    pub forge: Forge,
     /// What was found in it.
     pub outcome: Outcome,
     /// Whether the file was rewritten on disk.
@@ -27,12 +29,24 @@ pub fn text(reports: &[FileReport], warnings: &[String], quiet: bool) -> bool {
             .iter()
             .filter(|e| !quiet || e.level() == Level::Fail)
             .collect();
+        let findings: Vec<&Finding> = report
+            .outcome
+            .findings
+            .iter()
+            .filter(|f| !quiet || f.level == Level::Fail)
+            .collect();
 
-        if shown.is_empty() {
+        if shown.is_empty() && findings.is_empty() {
             continue;
         }
 
         println!("{}", report.path.bold());
+        for finding in findings {
+            if finding.level == Level::Fail {
+                failed = true;
+            }
+            print_finding(finding);
+        }
         for entry in shown {
             if entry.level() == Level::Fail {
                 failed = true;
@@ -49,24 +63,25 @@ pub fn text(reports: &[FileReport], warnings: &[String], quiet: bool) -> bool {
     failed || reports.iter().any(|r| r.outcome.failed())
 }
 
+/// Something about the file rather than about one reference in it.
+fn print_finding(finding: &Finding) {
+    let location = match finding.line {
+        Some(line) => format!("L{line}"),
+        None => String::new(),
+    };
+    println!(
+        "  {}  {:>4}  {}",
+        marker(finding.level),
+        location.dimmed(),
+        finding.message
+    );
+}
+
 /// One reference and everything to say about it.
 fn print_entry(entry: &Entry) {
-    // Colour codes have no width but `{:>4}` counts them, so the marker is padded
-    // before it is coloured.
-    let (label, width) = match entry.level() {
-        Level::Fail => ("FAIL", 4),
-        Level::Warn => ("warn", 4),
-        Level::Info => ("ok", 2),
-    };
-    let pad = " ".repeat(4 - width);
-    let marker = match entry.level() {
-        Level::Fail => label.red().bold().to_string(),
-        Level::Warn => label.yellow().to_string(),
-        Level::Info => label.green().to_string(),
-    };
-
     println!(
-        "  {pad}{marker}  {:>4}  {}",
+        "  {}  {:>4}  {}",
+        marker(entry.level()),
         format!("L{}", entry.line).dimmed(),
         describe(entry)
     );
@@ -79,6 +94,25 @@ fn print_entry(entry: &Entry) {
         };
         println!("           {bullet} {}", note.message);
     }
+}
+
+/// The severity marker, right-aligned in four columns.
+///
+/// Colour codes have no width but `{:>4}` counts them, so the padding is applied
+/// before the colour.
+fn marker(level: Level) -> String {
+    let (label, width) = match level {
+        Level::Fail => ("FAIL", 4),
+        Level::Warn => ("warn", 4),
+        Level::Info => ("ok", 2),
+    };
+    let pad = " ".repeat(4 - width);
+    let coloured = match level {
+        Level::Fail => label.red().bold().to_string(),
+        Level::Warn => label.yellow().to_string(),
+        Level::Info => label.green().to_string(),
+    };
+    format!("{pad}{coloured}")
 }
 
 /// The one-line summary: what the action is, what it points at, what it claims to be.
@@ -115,7 +149,16 @@ pub fn json(reports: &[FileReport], warnings: &[String]) -> bool {
         .map(|r| {
             serde_json::json!({
                 "path": r.path,
+                "forge": match r.forge {
+                    Forge::GitHub => "github",
+                    Forge::Forgejo => "forgejo",
+                },
                 "written": r.written,
+                "findings": r.outcome.findings.iter().map(|f| serde_json::json!({
+                    "line": f.line,
+                    "level": level_name(f.level),
+                    "message": f.message,
+                })).collect::<Vec<_>>(),
                 "entries": r.outcome.entries.iter().map(|e| serde_json::json!({
                     "line": e.line,
                     "value": e.value,

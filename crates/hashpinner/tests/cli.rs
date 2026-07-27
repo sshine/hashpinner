@@ -28,6 +28,18 @@ fn repo(uses: &[&str]) -> TempDir {
     dir
 }
 
+/// Add a composite action at `path` with the given `uses:` values.
+fn local_action(dir: &Path, path: &str, uses: &[&str]) {
+    let action = dir.join(path);
+    std::fs::create_dir_all(&action).expect("mkdir");
+
+    let mut src = String::from("name: build\nruns:\n  using: composite\n  steps:\n");
+    for u in uses {
+        src.push_str(&format!("      - uses: {u}\n"));
+    }
+    std::fs::write(action.join("action.yml"), src).expect("write");
+}
+
 fn hashpinner(dir: &Path) -> Command {
     let mut cmd = Command::cargo_bin("hashpinner").expect("binary");
     cmd.current_dir(dir);
@@ -109,6 +121,70 @@ fn a_digest_pinned_image_passes() {
 #[test]
 fn a_local_action_never_fails() {
     let dir = repo(&["./.github/actions/build"]);
+    local_action(dir.path(), ".github/actions/build", &[PINNED]);
+    hashpinner(dir.path())
+        .args(["--check", "--no-allow"])
+        .assert()
+        .success();
+}
+
+/// The reason a local action is allowed to pass without being pinned is that its
+/// contents are checked instead. When they are not, `./path` launders an unpinned
+/// third-party action through a reference that looks in-repo and reviewed.
+#[test]
+fn a_local_action_is_followed_into_its_manifest() {
+    let dir = repo(&["./.github/actions/build"]);
+    local_action(
+        dir.path(),
+        ".github/actions/build",
+        &["softprops/action-gh-release@v2"],
+    );
+    hashpinner(dir.path())
+        .args(["--check", "--no-allow"])
+        .assert()
+        .code(FAILED)
+        .stdout(predicates::str::contains("not pinned"));
+}
+
+/// A local action may live anywhere in the repository, so following references is
+/// the only way to reach one outside the directories that are walked.
+#[test]
+fn a_local_action_outside_the_workflow_directories_is_still_followed() {
+    let dir = repo(&["./ci/shared"]);
+    local_action(dir.path(), "ci/shared", &["softprops/action-gh-release@v2"]);
+    hashpinner(dir.path())
+        .args(["--check", "--no-allow"])
+        .assert()
+        .code(FAILED)
+        .stdout(predicates::str::contains("ci/shared/action.yml"));
+}
+
+#[test]
+fn a_local_action_that_is_not_there_fails() {
+    let dir = repo(&["./.github/actions/missing"]);
+    hashpinner(dir.path())
+        .args(["--check", "--no-allow"])
+        .assert()
+        .code(FAILED)
+        .stdout(predicates::str::contains("nothing at that path"));
+}
+
+#[test]
+fn a_local_path_leaving_the_repository_fails() {
+    let dir = repo(&["../outside/action"]);
+    hashpinner(dir.path())
+        .args(["--check", "--no-allow"])
+        .assert()
+        .code(FAILED)
+        .stdout(predicates::str::contains("leaves the repository"));
+}
+
+/// Two local actions referring to each other must not walk forever.
+#[test]
+fn a_cycle_between_local_actions_terminates() {
+    let dir = repo(&["./ci/a"]);
+    local_action(dir.path(), "ci/a", &["./ci/b"]);
+    local_action(dir.path(), "ci/b", &["./ci/a"]);
     hashpinner(dir.path())
         .args(["--check", "--no-allow"])
         .assert()

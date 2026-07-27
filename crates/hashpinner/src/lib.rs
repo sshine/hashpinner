@@ -15,6 +15,8 @@
 //! - **[`scan`]** — finds every `uses:` value in a file, with the byte span an
 //!   edit must replace.
 //! - **[`uses`]** — parses the value of a `uses:` key into a [`uses::UsesRef`].
+//! - **[`local`]** — resolves a `uses: ./path` to the file it names, so that the
+//!   contents of a local action are scanned rather than trusted.
 //! - **[`version`]** — recognises and orders version tags, which action
 //!   repositories write at inconsistent precision (`v6.0.1` alongside `v7`).
 //! - **[`resolver`]** — the [`resolver::Resolver`] trait, the single seam through
@@ -28,6 +30,7 @@
 
 pub mod error;
 pub mod git;
+pub mod local;
 pub mod pattern;
 pub mod resolver;
 pub mod rewrite;

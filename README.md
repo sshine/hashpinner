@@ -53,6 +53,12 @@ With no path, hashpinner scans whichever of `.forgejo/workflows`,
 `.gitea/workflows` and `.github/workflows` exist, plus a root `action.yml`.
 Otherwise it scans the files and directories named.
 
+From there it follows every `uses: ./path` to the file it names and scans that
+too, repeating until nothing new turns up. This reaches files no directory walk
+would: a local action may live at any path, and on Forgejo so may a local
+reusable workflow. Relative paths resolve against the repository root, which is
+the working directory, and one that climbs out of it with `..` fails.
+
 ### What each level costs
 
 The three levels nest, and each is worth what it costs:
@@ -104,9 +110,11 @@ scans all of them and warns when more than one is present.
 - **`docker://` references** are pinnable by digest but not by anything git
   knows. A mutable tag fails `--check`; `image@sha256:...` passes. Neither is
   ever rewritten.
-- **Local actions** (`./path`) never fail: they live in this repository and are
-  covered by the same review as the rest of it. hashpinner scans their
-  `action.yml` for third-party references, which is what makes that safe.
+- **Local actions** (`./path`) are never pinned: they live in this repository
+  and are covered by the same review as the rest of it. What makes that safe is
+  that hashpinner follows them and pins what it finds inside, so a `./path` is
+  not a way to launder an unpinned third-party action past `--check`. A local
+  reference that resolves to nothing, or out of the repository, fails.
 - **YAML aliases** (`uses: *anchor`) are reported and left alone; pin the anchor.
 
 One hazard sits outside a pinner's remit and is worth knowing anyway: a workflow

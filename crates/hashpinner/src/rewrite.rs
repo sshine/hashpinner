@@ -16,7 +16,7 @@ use std::ops::Range;
 
 use crate::pattern::{Pattern, any_matches};
 use crate::resolver::{Reachability, Remote, Resolver, TagInfo};
-use crate::scan::{Occurrence, Quoting, Scan, scan};
+use crate::scan::{Occurrence, Quoting, Scan, Slot, scan};
 use crate::uses::{GitRef, UsesRef};
 use crate::version::{Version, latest_release, most_specific};
 use crate::{Error, Result};
@@ -94,19 +94,22 @@ pub struct Note {
 }
 
 impl Note {
-    fn info(message: impl Into<String>) -> Self {
+    /// Something the reference is, worth showing under `--list`.
+    pub fn info(message: impl Into<String>) -> Self {
         Self {
             level: Level::Info,
             message: message.into(),
         }
     }
-    fn warn(message: impl Into<String>) -> Self {
+    /// Something worth knowing that is not a failure.
+    pub fn warn(message: impl Into<String>) -> Self {
         Self {
             level: Level::Warn,
             message: message.into(),
         }
     }
-    fn fail(message: impl Into<String>) -> Self {
+    /// Something that sets the exit code to 1.
+    pub fn fail(message: impl Into<String>) -> Self {
         Self {
             level: Level::Fail,
             message: message.into(),
@@ -140,6 +143,33 @@ impl Entry {
     }
 }
 
+/// Something worth reporting about a file rather than about one reference in it.
+///
+/// A `uses:` reference is the natural unit for almost everything here, but not for
+/// everything: a trigger that hands fork-authored code the privileged token is a
+/// property of the workflow, and a `./path` that resolves to nothing is a property
+/// of the reference *and* the tree around it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Finding {
+    /// How serious it is.
+    pub level: Level,
+    /// 1-indexed line, when the finding has somewhere to point.
+    pub line: Option<usize>,
+    /// Phrased for a user reading a terminal.
+    pub message: String,
+}
+
+impl Finding {
+    /// A finding at a known line.
+    pub fn at(level: Level, line: usize, message: impl Into<String>) -> Self {
+        Self {
+            level,
+            line: Some(line),
+            message: message.into(),
+        }
+    }
+}
+
 /// A byte range to replace, and what to put there.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Edit {
@@ -149,11 +179,29 @@ pub struct Edit {
     pub replacement: String,
 }
 
-/// The result of processing one file.
+/// A `uses: ./path` reference, kept so the caller can follow it to the file it names.
+///
+/// Resolving it needs the filesystem, which this module does not touch, so the
+/// reference is reported rather than followed here.
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LocalUse {
+    /// The path exactly as written.
+    pub path: String,
+    /// Which kind of file it is expected to name.
+    pub slot: Slot,
+    /// 1-indexed line, for diagnostics.
+    pub line: usize,
+}
+
+/// The result of processing one file.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Outcome {
     /// One per `uses:` reference, in document order.
     pub entries: Vec<Entry>,
+    /// Everything worth saying about the file itself.
+    pub findings: Vec<Finding>,
+    /// Every local reference found, for the caller to follow.
+    pub locals: Vec<LocalUse>,
     /// The rewritten file, present only when something actually changed.
     pub rewritten: Option<String>,
 }
@@ -162,6 +210,7 @@ impl Outcome {
     /// Whether anything failed.
     pub fn failed(&self) -> bool {
         self.entries.iter().any(|e| e.level() == Level::Fail)
+            || self.findings.iter().any(|f| f.level == Level::Fail)
     }
 }
 
@@ -206,6 +255,7 @@ pub fn process(
 
     let mut entries = Vec::new();
     let mut edits = Vec::new();
+    let mut locals = Vec::new();
 
     for u in unsupported {
         entries.push(Entry {
@@ -218,11 +268,10 @@ pub fn process(
     }
 
     for occ in &occurrences {
-        let (entry, edit) = process_one(occ, forge, resolver, opts);
-        entries.push(entry);
-        if let Some(edit) = edit {
-            edits.push(edit);
-        }
+        let one = process_one(occ, forge, resolver, opts);
+        entries.push(one.entry);
+        edits.extend(one.edit);
+        locals.extend(one.local);
     }
 
     entries.sort_by_key(|e| e.line);
@@ -233,17 +282,38 @@ pub fn process(
         Some(apply(src, &mut edits))
     };
 
-    Ok(Outcome { entries, rewritten })
+    Ok(Outcome {
+        entries,
+        findings: Vec::new(),
+        locals,
+        rewritten,
+    })
+}
+
+/// What one reference produced.
+struct One {
+    /// The report line for it.
+    entry: Entry,
+    /// The edit it needs, if any.
+    edit: Option<Edit>,
+    /// The file it points at, if it points inside this repository.
+    local: Option<LocalUse>,
+}
+
+impl One {
+    /// A reference that needs neither an edit nor following.
+    fn plain(entry: Entry) -> Self {
+        Self {
+            entry,
+            edit: None,
+            local: None,
+        }
+    }
 }
 
 /// Decide the fate of one reference. Never returns an error: a failure here is a
 /// note on the entry, so the caller's loop keeps going.
-fn process_one(
-    occ: &Occurrence,
-    forge: Forge,
-    resolver: &dyn Resolver,
-    opts: &Options,
-) -> (Entry, Option<Edit>) {
+fn process_one(occ: &Occurrence, forge: Forge, resolver: &dyn Resolver, opts: &Options) -> One {
     let mut entry = Entry {
         line: occ.line,
         value: occ.value.clone(),
@@ -256,17 +326,24 @@ fn process_one(
         Ok(p) => p,
         Err(e) => {
             entry.notes.push(Note::fail(e.to_string()));
-            return (entry, None);
+            return One::plain(entry);
         }
     };
 
     match parsed {
+        // A local reference is safe only because what it points at is scanned too, so
+        // it is handed back for the caller to follow rather than waved through here.
         UsesRef::Local(l) => {
             entry.git_ref = "local".to_string();
-            entry
-                .notes
-                .push(Note::info(format!("local action {}", l.path)));
-            (entry, None)
+            One {
+                entry,
+                edit: None,
+                local: Some(LocalUse {
+                    path: l.path,
+                    slot: occ.slot,
+                    line: occ.line,
+                }),
+            }
         }
 
         UsesRef::Docker(d) => {
@@ -285,7 +362,7 @@ fn process_one(
                     ));
                 }
             }
-            (entry, None)
+            One::plain(entry)
         }
 
         UsesRef::Remote(r) => {
@@ -296,7 +373,11 @@ fn process_one(
                 repo: r.repo.clone(),
             };
             let edit = process_remote(occ, &r.git_ref, &remote, resolver, opts, &mut entry);
-            (entry, edit)
+            One {
+                entry,
+                edit,
+                local: None,
+            }
         }
     }
 }
