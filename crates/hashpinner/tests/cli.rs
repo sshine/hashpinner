@@ -191,6 +191,69 @@ fn a_cycle_between_local_actions_terminates() {
         .success();
 }
 
+/// A file reached from both forges cannot be pinned at all: a bare `owner/repo` is
+/// github.com under `.github/` and the Forgejo instance under `.forgejo/`, so the
+/// two referrers want different commits in the same line.
+#[test]
+fn a_local_action_reached_from_both_forges_fails() {
+    let dir = repo(&["./ci/shared"]);
+    let forgejo = dir.path().join(".forgejo/workflows");
+    std::fs::create_dir_all(&forgejo).expect("mkdir");
+    std::fs::write(
+        forgejo.join("ci.yml"),
+        "on: push\njobs:\n  b:\n    steps:\n      - uses: ./ci/shared\n",
+    )
+    .expect("write");
+    local_action(dir.path(), "ci/shared", &[PINNED]);
+
+    hashpinner(dir.path())
+        .arg("--check")
+        .assert()
+        .code(FAILED)
+        .stdout(predicates::str::contains("no single pin is correct"));
+}
+
+/// The features compose or they are not worth much: one file where the trigger, the
+/// alias, the merge key and the local reference all hide something.
+#[test]
+fn every_way_of_hiding_a_reference_is_found_at_once() {
+    let dir = TempDir::new().expect("tempdir");
+    let workflows = dir.path().join(".github/workflows");
+    std::fs::create_dir_all(&workflows).expect("mkdir");
+    std::fs::write(
+        workflows.join("ci.yml"),
+        concat!(
+            "x-anchored: &release softprops/action-gh-release@v2\n",
+            "x-defaults: &defaults\n",
+            "  uses: rogue/merged@v1\n",
+            "on: pull_request_target\n",
+            "jobs:\n",
+            "  b:\n",
+            "    steps:\n",
+            "      - uses: *release\n",
+            "      - <<: *defaults\n",
+            "      - uses: ./ci/build\n",
+        ),
+    )
+    .expect("write");
+    local_action(dir.path(), "ci/build", &["evil/hidden@main"]);
+
+    let out = hashpinner(dir.path())
+        .args(["--check", "--format", "json"])
+        .assert()
+        .code(FAILED);
+    let text = String::from_utf8(out.get_output().stdout.clone()).expect("utf8");
+
+    for hidden in [
+        "pull_request_target",
+        "softprops/action-gh-release",
+        "rogue/merged",
+        "evil/hidden",
+    ] {
+        assert!(text.contains(hidden), "{hidden} was not reported in {text}");
+    }
+}
+
 #[test]
 fn a_dangerous_trigger_fails_check() {
     let dir = repo(&[PINNED]);

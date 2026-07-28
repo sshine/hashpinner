@@ -856,6 +856,36 @@ jobs:
         let _ = scan(src);
     }
 
+    /// Resolving aliases is what makes a YAML bomb this tool's problem: the file on
+    /// disk is a few hundred bytes and the expansion is exponential. Refusing to
+    /// finish is the correct answer, and the only one that keeps memory bounded.
+    #[test]
+    fn an_exponential_expansion_is_refused() {
+        let mut src = String::from("a: &l0 [x, x, x, x, x, x, x, x, x]\n");
+        for level in 1..7 {
+            let row = (0..9)
+                .map(|_| format!("*l{}", level - 1))
+                .collect::<Vec<_>>()
+                .join(", ");
+            src.push_str(&format!("b{level}: &l{level} [{row}]\n"));
+        }
+
+        let err = scan(&src).expect_err("9^6 nodes must not be expanded");
+        assert!(err.to_string().contains("too many nodes"), "{err}");
+    }
+
+    /// A chain of aliases costs nothing per level, so only the depth cap stops it.
+    #[test]
+    fn a_deep_chain_of_aliases_is_refused() {
+        let mut src = String::from("a: &l0 x\n");
+        for level in 1..70 {
+            src.push_str(&format!("b{level}: &l{level} [*l{}]\n", level - 1));
+        }
+
+        let err = scan(&src).expect_err("70 levels must exceed the cap");
+        assert!(err.to_string().contains("nested too deeply"), "{err}");
+    }
+
     #[test]
     fn anchored_span_excludes_the_anchor_name() {
         let src = "jobs:\n  a:\n    steps:\n      - uses: &co actions/checkout@v4\n";
