@@ -276,8 +276,31 @@ fn a_directory_with_no_workflows_is_a_tool_error() {
         .code(TOOL_ERROR);
 }
 
+/// A file hashpinner could not read is a file it cannot vouch for, so it fails the
+/// run — but only at the end, after every other file has been scanned and judged.
 #[test]
-fn malformed_yaml_is_reported_without_stopping_the_run() {
+fn malformed_yaml_fails_without_stopping_the_run() {
+    let dir = repo(&["softprops/action-gh-release@v2"]);
+    std::fs::write(
+        dir.path().join(".github/workflows/broken.yml"),
+        "jobs:\n  - [unclosed\n",
+    )
+    .expect("write");
+
+    // broken.yml sorts first, so finding the ci.yml failure proves the run went past it.
+    hashpinner(dir.path())
+        .arg("--check")
+        .assert()
+        .code(FAILED)
+        .stdout(predicates::str::contains("broken.yml"))
+        .stdout(predicates::str::contains("not scanned"))
+        .stdout(predicates::str::contains("not pinned"));
+}
+
+/// The failure has to survive every route out of the tool, since a gate that only
+/// says so in prose is one a JSON consumer never hears.
+#[test]
+fn malformed_yaml_fails_in_json_and_when_quiet() {
     let dir = repo(&[PINNED]);
     std::fs::write(
         dir.path().join(".github/workflows/broken.yml"),
@@ -285,12 +308,36 @@ fn malformed_yaml_is_reported_without_stopping_the_run() {
     )
     .expect("write");
 
-    // broken.yml sorts first, so this also proves the run continued past it.
     hashpinner(dir.path())
-        .arg("--check")
+        .args(["--check", "--quiet"])
         .assert()
-        .stderr(predicates::str::contains("broken.yml"))
-        .stdout(predicates::str::contains("actions/checkout"));
+        .code(FAILED)
+        .stdout(predicates::str::contains("not scanned"));
+
+    let out = hashpinner(dir.path())
+        .args(["--check", "--format", "json"])
+        .assert()
+        .code(FAILED);
+    let text = String::from_utf8(out.get_output().stdout.clone()).expect("utf8");
+    let doc: serde_json::Value = serde_json::from_str(&text).expect("valid json");
+
+    assert_eq!(doc["failed"], true);
+    assert_eq!(doc["files"][0]["findings"][0]["level"], "fail");
+}
+
+/// Unreadable and unparseable are the same claim: the file was not checked.
+#[test]
+fn a_local_reference_to_an_unparseable_file_fails() {
+    let dir = repo(&["./ci/broken"]);
+    let action = dir.path().join("ci/broken");
+    std::fs::create_dir_all(&action).expect("mkdir");
+    std::fs::write(action.join("action.yml"), "runs:\n  - [unclosed\n").expect("write");
+
+    hashpinner(dir.path())
+        .args(["--check", "--no-allow"])
+        .assert()
+        .code(FAILED)
+        .stdout(predicates::str::contains("ci/broken/action.yml"));
 }
 
 #[test]

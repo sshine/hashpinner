@@ -59,6 +59,12 @@ would: a local action may live at any path, and on Forgejo so may a local
 reusable workflow. Relative paths resolve against the repository root, which is
 the working directory, and one that climbs out of it with `..` fails.
 
+A file that cannot be read or parsed does not stop the run, but it does fail it.
+The other files are still scanned, so one malformed workflow does not hide the
+problems in the rest; the malformed one is then reported as a failure of its own.
+hashpinner takes no view on *why* the YAML is broken — that is a linter's job — but
+it cannot report a file it never read as pinned.
+
 ### What each level costs
 
 The three levels nest, and each is worth what it costs:

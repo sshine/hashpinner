@@ -29,6 +29,12 @@
 //! reusable workflow. Relative paths resolve against the repository root, which is
 //! the working directory, and one that climbs out of it with `..` fails.
 //!
+//! A file that cannot be read or parsed does not stop the run, but it does fail it.
+//! The other files are still scanned, so one malformed workflow does not hide the
+//! problems in the rest; the malformed one is then reported as a failure of its own.
+//! hashpinner takes no view on *why* the YAML is broken — that is a linter's job — but
+//! it cannot report a file it never read as pinned.
+//!
 //! ## What each level costs
 //!
 //! The three levels nest, and each is worth what it costs:
@@ -205,17 +211,25 @@ fn run(args: &Args) -> Result<bool> {
 
         let path = target.path.display().to_string();
 
-        // A file that cannot be read or parsed is reported and skipped, never fatal:
-        // one malformed workflow must not stop the others from being fixed.
+        // A file that cannot be read or parsed does not stop the run — one malformed
+        // workflow must not keep the others from being fixed — but it does fail it.
+        // hashpinner is not a YAML validator and takes no view on why the file is
+        // broken; it just cannot claim a file it never read is pinned.
         let mut outcome = match rewrite::process_path(&target.path, target.forge, &resolver, &opts)
         {
             Ok(o) => o,
             Err(e) => {
-                eprintln!("{}: {path}: {e}", "error".red().bold());
                 reports.push(FileReport {
                     path,
                     forge: target.forge,
-                    outcome: Outcome::default(),
+                    outcome: Outcome {
+                        findings: vec![Finding {
+                            level: Level::Fail,
+                            line: None,
+                            message: format!("not scanned, so nothing in it was checked: {e}"),
+                        }],
+                        ..Outcome::default()
+                    },
                     written: false,
                 });
                 continue;
