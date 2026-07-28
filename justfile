@@ -34,11 +34,11 @@ readme_args := "--project-root crates/hashpinner --input src/main.rs --template 
 
 # Regenerate README.md from README.tpl and the CLI docs
 readme:
-    cargo readme {{readme_args}} -o README.md
+    cargo readme {{readme_args}} | mdformat - > README.md
 
 # Check README.md is in sync with README.tpl and the CLI docs
 readme-check:
-    cargo readme {{readme_args}} | diff - README.md
+    cargo readme {{readme_args}} | mdformat - | diff - README.md
 
 release_targets := "x86_64-unknown-linux-musl aarch64-unknown-linux-musl"
 

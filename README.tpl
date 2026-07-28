@@ -13,7 +13,7 @@ uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1, 2025-1
 
 hashpinner maintains that form, from the command line or as a CI action: it lists
 references, checks them, pins the unpinned ones, bumps the pinned ones, and verifies
-that the comments are telling the truth.
+that the version in the comment is correct.
 
 ## Installation
 
@@ -23,11 +23,13 @@ nix profile install github:sshine/hashpinner
 cargo install hashpinner
 ```
 
-Prebuilt static binaries for x86_64 and aarch64 Linux are attached to each
-[release](https://github.com/sshine/hashpinner/releases).
+You can download prebuilt [static binaries for x86_64 and aarch64 Linux][releases].
 
-`git` must be on `PATH`; hashpinner drives it to resolve tags. The Nix package wraps
-the binary so this is already taken care of.
+[releases]: https://github.com/sshine/hashpinner/releases
+
+`git` must be on `PATH`; hashpinner drives it to resolve tags.
+
+The Nix package wraps the binary so this is already taken care of.
 
 ## CLI
 

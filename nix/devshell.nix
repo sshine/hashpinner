@@ -11,6 +11,9 @@
         packages = [
           rust-toolchain
           config.treefmt.build.wrapper
+          # The same mdformat treefmt drives, so `just readme` normalises its output
+          # exactly the way the pre-commit hook would.
+          config.treefmt.build.programs.mdformat
           config.hk-nix.package
           pkgs.cargo-watch
           pkgs.cargo-insta
