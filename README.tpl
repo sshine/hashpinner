@@ -31,6 +31,45 @@ You can download prebuilt [static binaries for x86_64 and aarch64 Linux][release
 
 The Nix package wraps the binary so this is already taken care of.
 
+### NixOS
+
+The flake exports an overlay, so a system configuration can take hashpinner as an
+ordinary attribute of `pkgs`:
+
+```nix
+{
+  inputs = {
+    nixpkgs.url = "https://nixos.org/channels/nixpkgs-unstable/nixexprs.tar.xz";
+
+    hashpinner = {
+      url = "github:sshine/hashpinner";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+  };
+
+  outputs =
+    { nixpkgs, hashpinner, ... }:
+    {
+      nixosConfigurations.example = nixpkgs.lib.nixosSystem {
+        modules = [
+          (
+            { pkgs, ... }:
+            {
+              nixpkgs.overlays = [ hashpinner.overlays.default ];
+              environment.systemPackages = [ pkgs.hashpinner ];
+            }
+          )
+        ];
+      };
+    };
+}
+```
+
+The overlay builds against your nixpkgs rather than this flake's, so `follows`
+is about lock file size, and `overrideAttrs` and cross-compilation work as they
+do for anything else in the set. Where none of that matters,
+`hashpinner.packages.${system}.default` is the same package without the overlay.
+
 ## CLI
 
 {{readme}}
