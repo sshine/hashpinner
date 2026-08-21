@@ -10,9 +10,15 @@
   git,
   ...
 }:
+let
+  workspace = lib.importTOML ../Cargo.toml;
+  crate = lib.importTOML ../crates/hashpinner/Cargo.toml;
+
+  pname = crate.package.name;
+in
 rustPlatform.buildRustPackage {
-  pname = "hashpinner";
-  version = "0.1.0";
+  inherit pname;
+  version = workspace.workspace.package.version;
 
   # Naming the inputs explicitly keeps target/ and .direnv/ out of the store, and
   # means an unrelated edit does not invalidate the build.
@@ -29,7 +35,7 @@ rustPlatform.buildRustPackage {
 
   cargoBuildFlags = [
     "--package"
-    "hashpinner"
+    pname
   ];
 
   nativeBuildInputs = [ makeWrapper ];
@@ -37,13 +43,13 @@ rustPlatform.buildRustPackage {
   # The tag resolver shells out; a bare `git` on the user's PATH is not something
   # a Nix-installed binary may assume exists.
   postInstall = ''
-    wrapProgram $out/bin/hashpinner \
+    wrapProgram $out/bin/${pname} \
       --prefix PATH : ${lib.makeBinPath [ git ]}
   '';
 
   meta = {
-    description = "Check, pin and bump SHA-pinned GitHub/Forgejo Actions references";
-    mainProgram = "hashpinner";
+    inherit (crate.package) description;
+    mainProgram = pname;
     license = with lib.licenses; [
       mit
       asl20
