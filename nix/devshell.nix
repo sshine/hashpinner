@@ -18,9 +18,11 @@
           pkgs.cargo-watch
           pkgs.cargo-insta
           pkgs.deadnix
+          pkgs.gifsicle
           pkgs.stdenv.cc
           pkgs.git
           pkgs.just
+          pkgs.vhs
           config.packages.cargo-readme
         ];
 

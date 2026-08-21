@@ -15,6 +15,8 @@ hashpinner maintains that form, from the command line or as a CI action: it list
 references, checks them, pins the unpinned ones, bumps the pinned ones, and verifies
 that the version in the comment is correct.
 
+![Checking, pinning and verifying a workflow's references](https://raw.githubusercontent.com/sshine/hashpinner/main/assets/demo.gif)
+
 ## Installation
 
 ```

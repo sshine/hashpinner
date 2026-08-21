@@ -26,3 +26,6 @@ Thumbs.db
 
 # Release artifacts
 /dist/
+
+# Demo recording
+/demo/demo-raw.gif

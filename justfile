@@ -40,6 +40,12 @@ readme:
 readme-check:
     cargo readme {{readme_args}} | mdformat - | diff - README.md
 
+# Re-record the terminal demo into assets/demo.gif
+demo: build
+    vhs demo/demo.tape
+    demo/trim.sh demo/demo-raw.gif assets/demo.gif
+    rm -f demo/demo-raw.gif
+
 release_targets := "x86_64-unknown-linux-musl aarch64-unknown-linux-musl"
 
 # Assert the release tag names the version cargo would publish
