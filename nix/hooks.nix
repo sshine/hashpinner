@@ -22,7 +22,7 @@
 
       # Called by store path rather than via `cargo readme`, so the cargo-subcommand
       # argv has to be supplied by hand: without it clap only prints its usage.
-      cargo-readme = "${lib.getExe' config.packages.cargo-readme "cargo-readme"} readme";
+      cargo-readme = "${lib.getExe' pkgs.cargo-readme "cargo-readme"} readme";
 
       # cargo-readme emits markdown that mdformat then rewrites (link reference
       # definitions move to the end of the file), so the raw output never equals the

@@ -28,11 +28,6 @@
       inputs.import-tree.follows = "import-tree";
     };
 
-    cargo-readme-src = {
-      url = "github:webern/cargo-readme";
-      flake = false;
-    };
-
     import-tree.url = "github:vic/import-tree";
   };
 

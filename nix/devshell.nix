@@ -23,7 +23,7 @@
           pkgs.git
           pkgs.just
           pkgs.vhs
-          config.packages.cargo-readme
+          pkgs.cargo-readme
         ];
 
         env = [
