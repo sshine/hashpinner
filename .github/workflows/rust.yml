@@ -39,6 +39,9 @@ jobs:
       - name: Clippy
         run: nix develop -c just lint
 
+      - name: Dead Nix code
+        run: nix develop -c just lint-nix
+
       - name: Test
         run: nix develop -c just test
 

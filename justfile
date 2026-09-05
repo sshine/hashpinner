@@ -14,6 +14,10 @@ fmt-check:
 lint:
     cargo clippy --all-targets --all-features -- -D warnings
 
+# Find dead Nix code
+lint-nix:
+    deadnix --fail nix/ flake.nix
+
 # Run all tests
 test:
     cargo test --all-features
@@ -71,7 +75,7 @@ selfcheck: build
     ./target/release/hashpinner --check --deep
 
 # Run CI checks locally
-ci: fmt-check lint test doc readme-check build
+ci: fmt-check lint lint-nix test doc readme-check build
     @echo "All CI checks passed!"
 
 # Watch for changes and run tests
