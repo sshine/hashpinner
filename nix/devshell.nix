@@ -18,6 +18,7 @@
           pkgs.cargo-watch
           pkgs.cargo-insta
           pkgs.deadnix
+          pkgs.jq
           pkgs.gifsicle
           pkgs.stdenv.cc
           pkgs.git

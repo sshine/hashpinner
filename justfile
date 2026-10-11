@@ -70,6 +70,16 @@ dist version: (check-version version)
     done
     @ls -1 dist
 
+# Print the SRI hashes nix/binary.nix pins, read from the published release.
+# Local builds are not bit-identical to the ones CI publishes, so hashing dist/
+# would give values that never match what fetchurl downloads.
+release-hashes version:
+    @for target in {{release_targets}}; do \
+        url="https://github.com/sshine/hashpinner/releases/download/{{version}}/hashpinner-{{version}}-$target.tar.gz"; \
+        hash="$(nix store prefetch-file --json --hash-type sha256 "$url" | jq -r .hash)"; \
+        printf '"%s" = "%s";\n' "${target%%-*}-linux" "$hash"; \
+    done
+
 # Check this repository's own workflows are pinned
 selfcheck: build
     ./target/release/hashpinner --check --deep
