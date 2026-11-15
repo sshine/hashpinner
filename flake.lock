@@ -1,5 +1,22 @@
 {
   "nodes": {
+    "cargo-readme-src": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1791474749,
+        "narHash": "sha256-9Tkw/mgHsTsPgJs/C2gBkBSPGfcfZe+P0KkUp89WZ3c=",
+        "owner": "webern",
+        "repo": "cargo-readme",
+        "rev": "2aa75b62c353728e2f5f73e1b145eeb279012a8a",
+        "type": "github"
+      },
+      "original": {
+        "owner": "webern",
+        "ref": "v3.4.1",
+        "repo": "cargo-readme",
+        "type": "github"
+      }
+    },
     "devshell": {
       "inputs": {
         "nixpkgs": [
@@ -153,6 +170,7 @@
     },
     "root": {
       "inputs": {
+        "cargo-readme-src": "cargo-readme-src",
         "devshell": "devshell",
         "flake-parts": "flake-parts",
         "hk-nix": "hk-nix",

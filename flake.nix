@@ -29,6 +29,11 @@
     };
 
     import-tree.url = "github:vic/import-tree";
+
+    cargo-readme-src = {
+      url = "github:webern/cargo-readme/v3.4.1";
+      flake = false;
+    };
   };
 
   outputs =

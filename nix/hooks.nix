@@ -13,8 +13,8 @@
     let
       # Flags to reproduce the committed README.md from README.tpl and the CLI docs.
       # --input is required because the crate has a lib target: cargo-readme would
-      # otherwise read lib.rs.
-      readmeArgs = "--project-root crates/hashpinner --input src/main.rs --template ../../README.tpl";
+      # otherwise read lib.rs. Paths resolve against the repo root, the hook's cwd.
+      readmeArgs = "--project-root crates/hashpinner --input crates/hashpinner/src/main.rs --template README.tpl";
 
       # Reference tools by absolute store path: the `nix flake check` hk-check sandbox
       # runs hooks without the devshell PATH, so a bare `treefmt` is not found there.
@@ -22,7 +22,7 @@
 
       # Called by store path rather than via `cargo readme`, so the cargo-subcommand
       # argv has to be supplied by hand: without it clap only prints its usage.
-      cargo-readme = "${lib.getExe' pkgs.cargo-readme "cargo-readme"} readme";
+      cargo-readme = "${lib.getExe' config.packages.cargo-readme "cargo-readme"} readme";
 
       # cargo-readme emits markdown that mdformat then rewrites (link reference
       # definitions move to the end of the file), so the raw output never equals the
